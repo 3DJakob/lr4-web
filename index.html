@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LR4 Active Crossover Designer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              border: "hsl(214.3 31.8% 91.4%)",
+              input: "hsl(214.3 31.8% 91.4%)",
+              ring: "hsl(222.2 84% 4.9%)",
+              background: "hsl(0 0% 100%)",
+              foreground: "hsl(222.2 84% 4.9%)",
+              muted: "hsl(210 40% 96.1%)",
+              "muted-foreground": "hsl(215.4 16.3% 46.9%)",
+              primary: "hsl(222.2 47.4% 11.2%)",
+              "primary-foreground": "hsl(210 40% 98%)",
+              card: "hsl(0 0% 100%)",
+              "card-foreground": "hsl(222.2 84% 4.9%)",
+            },
+            boxShadow: {
+              soft: "0 18px 48px rgba(15, 23, 42, 0.08)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      html {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      body {
+        background:
+          linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 1) 42%),
+          #fff;
+      }
+
+      canvas {
+        width: 100%;
+        height: 100%;
+      }
+
+      input[type="range"] {
+        accent-color: hsl(222.2 47.4% 11.2%);
+      }
+
+      .tab-active {
+        background: hsl(222.2 47.4% 11.2%);
+        color: hsl(210 40% 98%);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
+      }
+
+      .number-field {
+        appearance: textfield;
+      }
+
+      .number-field::-webkit-outer-spin-button,
+      .number-field::-webkit-inner-spin-button {
+        margin: 0;
+        appearance: none;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-foreground">
+    <main class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
+      <header class="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div class="max-w-3xl">
+          <p class="text-sm font-medium text-muted-foreground">Fourth order Linkwitz-Riley active filter</p>
+          <h1 class="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            LR4 Crossover Designer
+          </h1>
+          <p class="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Two cascaded 2nd order Butterworth sections per output. The low-pass and high-pass are each -6 dB at
+            crossover and sum flat with matched polarity.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-3 overflow-hidden rounded-lg border border-border bg-card text-center shadow-sm">
+          <div class="px-4 py-3">
+            <p class="text-xs text-muted-foreground">Order</p>
+            <p class="mt-1 text-lg font-semibold">4th</p>
+          </div>
+          <div class="border-x border-border px-4 py-3">
+            <p class="text-xs text-muted-foreground">Slope</p>
+            <p class="mt-1 text-lg font-semibold">24 dB/oct</p>
+          </div>
+          <div class="px-4 py-3">
+            <p class="text-xs text-muted-foreground">Q per biquad</p>
+            <p class="mt-1 text-lg font-semibold">0.707</p>
+          </div>
+        </div>
+      </header>
+
+      <nav class="flex rounded-lg border border-border bg-muted p-1 shadow-sm" aria-label="Implementation mode">
+        <button
+          id="digitalTab"
+          class="tab-active inline-flex h-10 flex-1 items-center justify-center rounded-md px-4 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:flex-none"
+          type="button"
+          data-mode="digital"
+        >
+          Digital
+        </button>
+        <button
+          id="analogTab"
+          class="inline-flex h-10 flex-1 items-center justify-center rounded-md px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:flex-none"
+          type="button"
+          data-mode="analog"
+        >
+          Analog
+        </button>
+      </nav>
+
+      <section class="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <aside class="flex flex-col gap-4">
+          <div class="rounded-lg border border-border bg-card p-5 shadow-soft">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h2 class="text-base font-semibold">Controls</h2>
+                <p class="mt-1 text-sm text-muted-foreground">Tune the crossover and plot span.</p>
+              </div>
+              <button
+                id="resetButton"
+                class="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 text-sm font-medium shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                type="button"
+              >
+                Reset
+              </button>
+            </div>
+
+            <div class="mt-5 space-y-5">
+              <label class="block">
+                <span class="flex items-center justify-between text-sm font-medium">
+                  Set crossover frequency
+                  <span id="fcLabel" class="text-muted-foreground">2,000 Hz</span>
+                </span>
+                <input id="fcRange" class="mt-3 w-full" type="range" min="20" max="20000" value="2000" step="1" />
+                <div class="mt-3 flex overflow-hidden rounded-md border border-input bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring">
+                  <input
+                    id="fcInput"
+                    class="number-field h-11 min-w-0 flex-1 bg-transparent px-3 text-base font-semibold outline-none"
+                    type="number"
+                    min="20"
+                    max="20000"
+                    value="2000"
+                  />
+                  <span class="inline-flex items-center border-l border-border bg-muted px-3 text-sm font-medium text-muted-foreground">
+                    Hz
+                  </span>
+                </div>
+                <div class="mt-3 grid grid-cols-4 gap-2">
+                  <button class="fcPreset rounded-md border border-border px-2 py-2 text-sm font-medium hover:bg-muted" type="button" data-fc="80">
+                    80
+                  </button>
+                  <button class="fcPreset rounded-md border border-border px-2 py-2 text-sm font-medium hover:bg-muted" type="button" data-fc="500">
+                    500
+                  </button>
+                  <button class="fcPreset rounded-md border border-border px-2 py-2 text-sm font-medium hover:bg-muted" type="button" data-fc="2000">
+                    2k
+                  </button>
+                  <button class="fcPreset rounded-md border border-border px-2 py-2 text-sm font-medium hover:bg-muted" type="button" data-fc="3500">
+                    3.5k
+                  </button>
+                </div>
+              </label>
+
+              <div class="grid grid-cols-2 gap-3">
+                <label class="block">
+                  <span class="text-sm font-medium">Plot low</span>
+                  <input
+                    id="minFreq"
+                    class="number-field mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none transition focus:ring-2 focus:ring-ring"
+                    type="number"
+                    min="1"
+                    max="100000"
+                    value="20"
+                  />
+                </label>
+                <label class="block">
+                  <span class="text-sm font-medium">Plot high</span>
+                  <input
+                    id="maxFreq"
+                    class="number-field mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none transition focus:ring-2 focus:ring-ring"
+                    type="number"
+                    min="10"
+                    max="200000"
+                    value="20000"
+                  />
+                </label>
+              </div>
+
+              <label id="digitalSampleControl" class="block">
+                <span class="text-sm font-medium">Sample rate for digital coefficients</span>
+                <select
+                  id="sampleRate"
+                  class="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none transition focus:ring-2 focus:ring-ring"
+                >
+                  <option value="44100">44.1 kHz</option>
+                  <option value="48000" selected>48 kHz</option>
+                  <option value="88200">88.2 kHz</option>
+                  <option value="96000">96 kHz</option>
+                  <option value="192000">192 kHz</option>
+                </select>
+              </label>
+
+              <label id="analogCapControl" class="hidden">
+                <span class="text-sm font-medium">Analog capacitor per section</span>
+                <select
+                  id="analogCap"
+                  class="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none transition focus:ring-2 focus:ring-ring"
+                >
+                  <option value="1e-9">1 nF</option>
+                  <option value="2.2e-9">2.2 nF</option>
+                  <option value="4.7e-9">4.7 nF</option>
+                  <option value="1e-8" selected>10 nF</option>
+                  <option value="2.2e-8">22 nF</option>
+                  <option value="4.7e-8">47 nF</option>
+                  <option value="1e-7">100 nF</option>
+                </select>
+              </label>
+
+              <label id="analogGainControl" class="hidden">
+                <span class="flex items-center justify-between text-sm font-medium">
+                  Buffer gain per section
+                  <span id="analogGainLabel" class="text-muted-foreground">0.0 dB</span>
+                </span>
+                <input id="analogGainInput" class="mt-3 w-full" type="range" min="0" max="12" value="0" step="0.1" />
+                <div class="mt-3 flex overflow-hidden rounded-md border border-input bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring">
+                  <input
+                    id="analogGainNumber"
+                    class="number-field h-10 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none"
+                    type="number"
+                    min="0"
+                    max="12"
+                    value="0"
+                    step="0.1"
+                  />
+                  <span class="inline-flex items-center border-l border-border bg-muted px-3 text-sm font-medium text-muted-foreground">
+                    dB
+                  </span>
+                </div>
+              </label>
+
+              <div>
+                <span class="text-sm font-medium">Visible traces</span>
+                <div class="mt-3 grid grid-cols-2 gap-2">
+                  <label class="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                    <input id="showLp" type="checkbox" checked />
+                    Low-pass
+                  </label>
+                  <label class="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                    <input id="showHp" type="checkbox" checked />
+                    High-pass
+                  </label>
+                  <label class="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                    <input id="showSum" type="checkbox" checked />
+                    Acoustic sum
+                  </label>
+                  <label class="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                    <input id="showGrid" type="checkbox" checked />
+                    Grid
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-border bg-card p-5 shadow-sm">
+            <h2 class="text-base font-semibold">At Crossover</h2>
+            <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div class="rounded-md bg-muted p-3">
+                <p class="text-muted-foreground">Low-pass</p>
+                <p id="lpAtFc" class="mt-1 font-semibold">-6.02 dB</p>
+              </div>
+              <div class="rounded-md bg-muted p-3">
+                <p class="text-muted-foreground">High-pass</p>
+                <p id="hpAtFc" class="mt-1 font-semibold">-6.02 dB</p>
+              </div>
+              <div class="rounded-md bg-muted p-3">
+                <p class="text-muted-foreground">Phase match</p>
+                <p id="phaseAtFc" class="mt-1 font-semibold">0.0 deg</p>
+              </div>
+              <div class="rounded-md bg-muted p-3">
+                <p class="text-muted-foreground">Sum</p>
+                <p id="sumAtFc" class="mt-1 font-semibold">0.00 dB</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="digitalPanel" class="rounded-lg border border-border bg-card p-5 shadow-sm">
+            <h2 class="text-base font-semibold">Digital Biquad Sections</h2>
+            <p class="mt-1 text-sm text-muted-foreground">Use each section twice for LR4.</p>
+            <div class="mt-4 space-y-3 font-mono text-xs leading-5">
+              <pre id="lpCoeffs" class="overflow-auto rounded-md bg-slate-950 p-3 text-slate-50"></pre>
+              <pre id="hpCoeffs" class="overflow-auto rounded-md bg-slate-950 p-3 text-slate-50"></pre>
+            </div>
+          </div>
+
+          <div id="analogPanel" class="hidden rounded-lg border border-border bg-card p-5 shadow-sm">
+            <h2 class="text-base font-semibold">Analog Components</h2>
+            <p class="mt-1 text-sm text-muted-foreground">Two identical 2nd order sections per output.</p>
+            <div class="mt-4 space-y-3 text-sm">
+              <div class="rounded-md bg-muted p-3">
+                <p class="font-medium">Analog section target</p>
+                <dl class="mt-2 grid grid-cols-2 gap-2 text-muted-foreground">
+                  <dt>Topology</dt>
+                  <dd class="text-right text-foreground">Non-inverting</dd>
+                  <dt>Q</dt>
+                  <dd class="text-right text-foreground">0.707</dd>
+                  <dt>Buffer gain</dt>
+                  <dd id="analogGain" class="text-right text-foreground">0.0 dB</dd>
+                </dl>
+              </div>
+
+              <div class="rounded-md border border-border p-3">
+                <p class="font-medium">Low-pass sections A and B</p>
+                <dl class="mt-2 grid grid-cols-2 gap-2 text-muted-foreground">
+                  <dt>R1, R2</dt>
+                  <dd id="lpResistors" class="text-right text-foreground">7.96 kOhm</dd>
+                  <dt>C1, C2</dt>
+                  <dd id="lpCaps" class="text-right text-foreground">10 nF</dd>
+                </dl>
+              </div>
+
+              <div class="rounded-md border border-border p-3">
+                <p class="font-medium">High-pass sections A and B</p>
+                <dl class="mt-2 grid grid-cols-2 gap-2 text-muted-foreground">
+                  <dt>R1, R2</dt>
+                  <dd id="hpResistors" class="text-right text-foreground">7.96 kOhm</dd>
+                  <dt>C1, C2</dt>
+                  <dd id="hpCaps" class="text-right text-foreground">10 nF</dd>
+                </dl>
+              </div>
+
+              <div class="rounded-md border border-border p-3">
+                <p class="font-medium">Buffer gain set</p>
+                <dl class="mt-2 grid grid-cols-2 gap-2 text-muted-foreground">
+                  <dt>Rg</dt>
+                  <dd id="gainResistor" class="text-right text-foreground">not fitted</dd>
+                  <dt>Rf</dt>
+                  <dd id="feedbackResistor" class="text-right text-foreground">0 Ohm link</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <section class="flex min-w-0 flex-col gap-4">
+          <div class="rounded-lg border border-border bg-card p-4 shadow-soft">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 class="text-base font-semibold">Magnitude Response</h2>
+                <p class="mt-1 text-sm text-muted-foreground">Log-frequency plot in dB.</p>
+              </div>
+              <div class="flex flex-wrap gap-2 text-xs">
+                <span class="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1">
+                  <span class="h-2 w-5 rounded-full bg-sky-500"></span> Low-pass
+                </span>
+                <span class="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1">
+                  <span class="h-2 w-5 rounded-full bg-rose-500"></span> High-pass
+                </span>
+                <span class="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1">
+                  <span class="h-2 w-5 rounded-full bg-emerald-500"></span> Sum
+                </span>
+              </div>
+            </div>
+            <div class="mt-4 h-[340px] min-h-[280px]">
+              <canvas id="magnitudeCanvas" aria-label="Magnitude response plot"></canvas>
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-border bg-card p-4 shadow-soft">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 class="text-base font-semibold">Phase Response</h2>
+                <p class="mt-1 text-sm text-muted-foreground">Unwrapped electrical phase in degrees.</p>
+              </div>
+              <div id="cursorReadout" class="rounded-md bg-muted px-3 py-2 text-sm font-medium text-muted-foreground">
+                Move over a plot
+              </div>
+            </div>
+            <div class="mt-4 h-[340px] min-h-[280px]">
+              <canvas id="phaseCanvas" aria-label="Phase response plot"></canvas>
+            </div>
+          </div>
+
+          <div id="analogSchematicPanel" class="hidden rounded-lg border border-border bg-card p-4 shadow-soft">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 class="text-base font-semibold">Analog Schematic</h2>
+                <p class="mt-1 text-sm text-muted-foreground">Cascade the shown section twice for low-pass and twice for high-pass.</p>
+              </div>
+              <span id="analogSchematicGain" class="rounded-md bg-muted px-3 py-2 text-sm font-medium text-muted-foreground">
+                Buffer gain = 0.0 dB
+              </span>
+            </div>
+
+            <div class="mt-4 grid gap-4 xl:grid-cols-2">
+              <div class="rounded-lg border border-border p-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold">Low-pass 2nd order section</h3>
+                  <span class="text-xs text-muted-foreground">Use twice</span>
+                </div>
+                <svg viewBox="0 0 760 300" class="mt-3 h-auto w-full" role="img" aria-label="Low-pass Sallen-Key schematic">
+                  <defs>
+                    <marker id="arrow" markerHeight="8" markerWidth="8" orient="auto" refX="6" refY="3">
+                      <path d="M0,0 L0,6 L7,3 z" fill="#111827"></path>
+                    </marker>
+                  </defs>
+                  <g fill="none" stroke="#111827" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+                    <path d="M36 150 H112"></path>
+                    <path d="M112 150 H132"></path>
+                    <rect x="132" y="136" width="56" height="28"></rect>
+                    <path d="M188 150 H220"></path>
+                    <path d="M220 150 H248"></path>
+                    <rect x="248" y="136" width="56" height="28"></rect>
+                    <path d="M304 150 H372"></path>
+                    <path d="M220 150 V72 H300"></path>
+                    <path d="M300 54 V90"></path>
+                    <path d="M314 54 V90"></path>
+                    <path d="M314 72 H438 V126 H464"></path>
+                    <path d="M372 150 V188"></path>
+                    <path d="M350 188 H394"></path>
+                    <path d="M350 202 H394"></path>
+                    <path d="M372 202 V214"></path>
+                    <path d="M350 214 h44"></path>
+                    <path d="M358 228 h28"></path>
+                    <path d="M366 242 h12"></path>
+                    <path d="M486 92 V126"></path>
+                    <path d="M468 126 h36"></path>
+                    <path d="M474 140 h24"></path>
+                    <path d="M480 154 h12"></path>
+                    <path d="M372 150 h92"></path>
+                    <path d="M464 112 L570 150 L464 188 Z"></path>
+                    <path d="M570 150 H708" marker-end="url(#arrow)"></path>
+                    <path d="M570 150 V236 H476 V188"></path>
+                    <path d="M500 236 V262"></path>
+                    <path d="M488 262 h24"></path>
+                    <path d="M494 274 h12"></path>
+                  </g>
+                  <g fill="#334155" font-family="Inter, system-ui, sans-serif" font-size="18">
+                    <text x="34" y="136">In</text>
+                    <text x="148" y="128">R1</text>
+                    <text x="264" y="128">R2</text>
+                    <text x="384" y="205">C2</text>
+                    <text x="324" y="58">C1</text>
+                    <text x="514" y="156">+</text>
+                    <text x="514" y="180">-</text>
+                    <text x="614" y="136">Buffer</text>
+                    <text x="706" y="136">Out</text>
+                    <text x="518" y="258">Gain set</text>
+                  </g>
+                </svg>
+              </div>
+
+              <div class="rounded-lg border border-border p-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-sm font-semibold">High-pass 2nd order section</h3>
+                  <span class="text-xs text-muted-foreground">Use twice</span>
+                </div>
+                <svg viewBox="0 0 760 300" class="mt-3 h-auto w-full" role="img" aria-label="High-pass Sallen-Key schematic">
+                  <g fill="none" stroke="#111827" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+                    <path d="M36 150 H112"></path>
+                    <path d="M112 150 h34"></path>
+                    <path d="M146 132 v36"></path>
+                    <path d="M160 132 v36"></path>
+                    <path d="M160 150 h62"></path>
+                    <path d="M222 150 h34"></path>
+                    <path d="M256 132 v36"></path>
+                    <path d="M270 132 v36"></path>
+                    <path d="M270 150 h102"></path>
+                    <path d="M222 150 V72 H298"></path>
+                    <rect x="298" y="58" width="64" height="28"></rect>
+                    <path d="M362 72 H438 V126 H464"></path>
+                    <path d="M372 150 V166"></path>
+                    <rect x="354" y="166" width="36" height="42"></rect>
+                    <path d="M372 208 V218"></path>
+                    <path d="M350 218 h44"></path>
+                    <path d="M358 232 h28"></path>
+                    <path d="M366 246 h12"></path>
+                    <path d="M486 92 V126"></path>
+                    <path d="M468 126 h36"></path>
+                    <path d="M474 140 h24"></path>
+                    <path d="M480 154 h12"></path>
+                    <path d="M372 150 h92"></path>
+                    <path d="M464 112 L570 150 L464 188 Z"></path>
+                    <path d="M570 150 H708"></path>
+                    <path d="M570 150 V236 H476 V188"></path>
+                    <path d="M500 236 V262"></path>
+                    <path d="M488 262 h24"></path>
+                    <path d="M494 274 h12"></path>
+                  </g>
+                  <g fill="#334155" font-family="Inter, system-ui, sans-serif" font-size="18">
+                    <text x="34" y="136">In</text>
+                    <text x="138" y="124">C1</text>
+                    <text x="248" y="124">C2</text>
+                    <text x="386" y="186">R2</text>
+                    <text x="324" y="58">R1</text>
+                    <text x="514" y="156">+</text>
+                    <text x="514" y="180">-</text>
+                    <text x="614" y="136">Buffer</text>
+                    <text x="706" y="136">Out</text>
+                    <text x="518" y="258">Gain set</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
+            <div class="mt-4 rounded-md bg-muted p-3 text-sm leading-6 text-muted-foreground">
+              Equal R and equal C are shown as a practical starting point for the ideal LR4 target above. Buffer gain
+              defaults to unity and can be raised when you need makeup gain or level matching. Use tight-tolerance
+              matched parts for best acoustic summing.
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      const controls = {
+        fcRange: $("fcRange"),
+        fcInput: $("fcInput"),
+        minFreq: $("minFreq"),
+        maxFreq: $("maxFreq"),
+        sampleRate: $("sampleRate"),
+        analogCap: $("analogCap"),
+        analogGainInput: $("analogGainInput"),
+        analogGainNumber: $("analogGainNumber"),
+        showLp: $("showLp"),
+        showHp: $("showHp"),
+        showSum: $("showSum"),
+        showGrid: $("showGrid"),
+      };
+
+      const panels = {
+        digital: $("digitalPanel"),
+        analog: $("analogPanel"),
+        schematic: $("analogSchematicPanel"),
+        analogCapControl: $("analogCapControl"),
+        analogGainControl: $("analogGainControl"),
+        digitalSampleControl: $("digitalSampleControl"),
+        digitalTab: $("digitalTab"),
+        analogTab: $("analogTab"),
+      };
+
+      const canvases = {
+        mag: $("magnitudeCanvas"),
+        phase: $("phaseCanvas"),
+      };
+
+      const colors = {
+        lp: "#0ea5e9",
+        hp: "#f43f5e",
+        sum: "#10b981",
+        grid: "#e2e8f0",
+        axis: "#64748b",
+        text: "#334155",
+        fc: "#111827",
+      };
+
+      function complex(re, im) {
+        return { re, im };
+      }
+
+      function cAdd(a, b) {
+        return complex(a.re + b.re, a.im + b.im);
+      }
+
+      function cMul(a, b) {
+        return complex(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re);
+      }
+
+      function cDiv(a, b) {
+        const d = b.re * b.re + b.im * b.im;
+        return complex((a.re * b.re + a.im * b.im) / d, (a.im * b.re - a.re * b.im) / d);
+      }
+
+      function cAbs(a) {
+        return Math.hypot(a.re, a.im);
+      }
+
+      function cPhase(a) {
+        return Math.atan2(a.im, a.re);
+      }
+
+      function lr4Response(freq, fc) {
+        const x = freq / fc;
+        const s = complex(0, x);
+        const s2 = cMul(s, s);
+        const denominator = cAdd(cAdd(s2, complex(Math.SQRT2 * s.re, Math.SQRT2 * s.im)), complex(1, 0));
+        const lp2 = cDiv(complex(1, 0), denominator);
+        const hp2 = cDiv(s2, denominator);
+        const lp = cMul(lp2, lp2);
+        const hp = cMul(hp2, hp2);
+        const sum = cAdd(lp, hp);
+        return { lp, hp, sum };
+      }
+
+      function db(value) {
+        return 20 * Math.log10(Math.max(value, 1e-12));
+      }
+
+      function formatHz(value) {
+        return new Intl.NumberFormat(undefined, { maximumFractionDigits: value < 100 ? 1 : 0 }).format(value) + " Hz";
+      }
+
+      function formatCap(value) {
+        if (value >= 1e-6) return `${(value * 1e6).toPrecision(3)} uF`;
+        if (value >= 1e-9) return `${(value * 1e9).toPrecision(3)} nF`;
+        return `${(value * 1e12).toPrecision(3)} pF`;
+      }
+
+      function formatOhms(value) {
+        if (value >= 1_000_000) return `${(value / 1_000_000).toPrecision(3)} MOhm`;
+        if (value >= 1000) return `${(value / 1000).toPrecision(3)} kOhm`;
+        return `${value.toPrecision(3)} Ohm`;
+      }
+
+      function nearestE24(value) {
+        const bases = [10, 11, 12, 13, 15, 16, 18, 20, 22, 24, 27, 30, 33, 36, 39, 43, 47, 51, 56, 62, 68, 75, 82, 91];
+        const decade = 10 ** Math.floor(Math.log10(value / 10));
+        let best = bases[0] * decade;
+        for (let scale = decade / 10; scale <= decade * 100; scale *= 10) {
+          for (const base of bases) {
+            const candidate = base * scale;
+            if (Math.abs(Math.log(candidate / value)) < Math.abs(Math.log(best / value))) {
+              best = candidate;
+            }
+          }
+        }
+        return best;
+      }
+
+      function clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
+      }
+
+      function unwrap(values) {
+        const out = [];
+        let offset = 0;
+        let previous = values[0] || 0;
+        for (const value of values) {
+          let adjusted = value + offset;
+          while (adjusted - previous > Math.PI) {
+            offset -= Math.PI * 2;
+            adjusted = value + offset;
+          }
+          while (adjusted - previous < -Math.PI) {
+            offset += Math.PI * 2;
+            adjusted = value + offset;
+          }
+          out.push(adjusted);
+          previous = adjusted;
+        }
+        return out;
+      }
+
+      function getSettings() {
+        const fc = clamp(Number(controls.fcInput.value) || 2000, 20, 20000);
+        let minFreq = clamp(Number(controls.minFreq.value) || 20, 1, 100000);
+        let maxFreq = clamp(Number(controls.maxFreq.value) || 20000, 10, 200000);
+        if (minFreq >= maxFreq) {
+          maxFreq = minFreq * 10;
+        }
+        return {
+          fc,
+          minFreq,
+          maxFreq,
+          sampleRate: Number(controls.sampleRate.value),
+          analogCap: Number(controls.analogCap.value),
+          analogGainDb: clamp(Number(controls.analogGainNumber.value) || 0, 0, 12),
+          showLp: controls.showLp.checked,
+          showHp: controls.showHp.checked,
+          showSum: controls.showSum.checked,
+          showGrid: controls.showGrid.checked,
+        };
+      }
+
+      function generateData(settings) {
+        const count = 640;
+        const logMin = Math.log10(settings.minFreq);
+        const logMax = Math.log10(settings.maxFreq);
+        const rows = [];
+        for (let i = 0; i < count; i += 1) {
+          const t = i / (count - 1);
+          const freq = 10 ** (logMin + t * (logMax - logMin));
+          const response = lr4Response(freq, settings.fc);
+          rows.push({
+            freq,
+            lpMag: db(cAbs(response.lp)),
+            hpMag: db(cAbs(response.hp)),
+            sumMag: db(cAbs(response.sum)),
+            lpPhaseRaw: cPhase(response.lp),
+            hpPhaseRaw: cPhase(response.hp),
+            sumPhaseRaw: cPhase(response.sum),
+          });
+        }
+
+        const lpPhase = unwrap(rows.map((row) => row.lpPhaseRaw));
+        const hpPhase = unwrap(rows.map((row) => row.hpPhaseRaw));
+        const sumPhase = unwrap(rows.map((row) => row.sumPhaseRaw));
+        return rows.map((row, index) => ({
+          ...row,
+          lpPhase: (lpPhase[index] * 180) / Math.PI,
+          hpPhase: (hpPhase[index] * 180) / Math.PI,
+          sumPhase: (sumPhase[index] * 180) / Math.PI,
+        }));
+      }
+
+      function resizeCanvas(canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+        canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        return { ctx, width: rect.width, height: rect.height };
+      }
+
+      function drawPlot(canvas, type, data, settings) {
+        const { ctx, width, height } = resizeCanvas(canvas);
+        const pad = { left: 58, right: 18, top: 16, bottom: 38 };
+        const plotWidth = width - pad.left - pad.right;
+        const plotHeight = height - pad.top - pad.bottom;
+        const logMin = Math.log10(settings.minFreq);
+        const logMax = Math.log10(settings.maxFreq);
+        const yDomain = type === "mag" ? [-72, 6] : [-390, 210];
+        const yTicks = type === "mag" ? [-72, -60, -48, -36, -24, -12, -6, 0, 6] : [-360, -270, -180, -90, 0, 90, 180];
+
+        const xFor = (freq) => pad.left + ((Math.log10(freq) - logMin) / (logMax - logMin)) * plotWidth;
+        const yFor = (value) => pad.top + ((yDomain[1] - value) / (yDomain[1] - yDomain[0])) * plotHeight;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.save();
+        ctx.strokeStyle = colors.grid;
+        ctx.lineWidth = 1;
+        ctx.fillStyle = colors.axis;
+        ctx.font = "12px Inter, system-ui, sans-serif";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+
+        if (settings.showGrid) {
+          for (const tick of yTicks) {
+            const y = yFor(tick);
+            ctx.beginPath();
+            ctx.moveTo(pad.left, y);
+            ctx.lineTo(width - pad.right, y);
+            ctx.stroke();
+            ctx.fillText(String(tick), pad.left - 10, y);
+          }
+
+          const startDecade = Math.ceil(logMin);
+          const endDecade = Math.floor(logMax);
+          for (let decade = startDecade; decade <= endDecade; decade += 1) {
+            const major = 10 ** decade;
+            const x = xFor(major);
+            ctx.beginPath();
+            ctx.moveTo(x, pad.top);
+            ctx.lineTo(x, height - pad.bottom);
+            ctx.stroke();
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            ctx.fillText(major >= 1000 ? `${major / 1000}k` : String(major), x, height - pad.bottom + 12);
+
+            for (let m = 2; m < 10; m += 1) {
+              const minor = major * m;
+              if (minor > settings.minFreq && minor < settings.maxFreq) {
+                const mx = xFor(minor);
+                ctx.globalAlpha = 0.55;
+                ctx.beginPath();
+                ctx.moveTo(mx, pad.top);
+                ctx.lineTo(mx, height - pad.bottom);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+              }
+            }
+          }
+        }
+
+        ctx.strokeStyle = colors.axis;
+        ctx.strokeRect(pad.left, pad.top, plotWidth, plotHeight);
+        ctx.restore();
+
+        const fcX = xFor(settings.fc);
+        if (fcX >= pad.left && fcX <= width - pad.right) {
+          ctx.save();
+          ctx.strokeStyle = colors.fc;
+          ctx.setLineDash([5, 5]);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(fcX, pad.top);
+          ctx.lineTo(fcX, height - pad.bottom);
+          ctx.stroke();
+          ctx.fillStyle = colors.fc;
+          ctx.font = "12px Inter, system-ui, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("Fc", fcX, pad.top + 14);
+          ctx.restore();
+        }
+
+        function trace(key, stroke) {
+          ctx.save();
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = key === "sum" ? 2.75 : 2.2;
+          ctx.lineJoin = "round";
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          data.forEach((row, index) => {
+            const value = type === "mag" ? row[`${key}Mag`] : row[`${key}Phase`];
+            const x = xFor(row.freq);
+            const y = yFor(value);
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (settings.showLp) trace("lp", colors.lp);
+        if (settings.showHp) trace("hp", colors.hp);
+        if (settings.showSum) trace("sum", colors.sum);
+
+        ctx.save();
+        ctx.fillStyle = colors.text;
+        ctx.font = "12px Inter, system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(type === "mag" ? "dB" : "degrees", 10, 10);
+        ctx.restore();
+
+        return { xFor, yFor, pad, width, height, logMin, logMax };
+      }
+
+      function biquadCoefficients(type, fc, sampleRate) {
+        const q = Math.SQRT1_2;
+        const omega = (2 * Math.PI * fc) / sampleRate;
+        const sin = Math.sin(omega);
+        const cos = Math.cos(omega);
+        const alpha = sin / (2 * q);
+        let b0;
+        let b1;
+        let b2;
+        if (type === "lowpass") {
+          b0 = (1 - cos) / 2;
+          b1 = 1 - cos;
+          b2 = (1 - cos) / 2;
+        } else {
+          b0 = (1 + cos) / 2;
+          b1 = -(1 + cos);
+          b2 = (1 + cos) / 2;
+        }
+        const a0 = 1 + alpha;
+        const a1 = -2 * cos;
+        const a2 = 1 - alpha;
+        return {
+          b0: b0 / a0,
+          b1: b1 / a0,
+          b2: b2 / a0,
+          a1: a1 / a0,
+          a2: a2 / a0,
+        };
+      }
+
+      function formatCoeffs(label, coeffs) {
+        const line = (key) => `${key}: ${coeffs[key].toFixed(9)}`;
+        return `${label}\n${line("b0")}\n${line("b1")}\n${line("b2")}\n${line("a1")}\n${line("a2")}`;
+      }
+
+      function updateAnalogReadouts(settings) {
+        const gainLinear = 10 ** (settings.analogGainDb / 20);
+        const resistor = 1 / (2 * Math.PI * settings.fc * settings.analogCap);
+        const nearestResistor = nearestE24(resistor);
+        const rg = 10_000;
+        const rf = (gainLinear - 1) * rg;
+        const resistorText = `${formatOhms(resistor)} exact | ${formatOhms(nearestResistor)} E24`;
+        const capText = formatCap(settings.analogCap);
+        const gainText = `${settings.analogGainDb.toFixed(1)} dB`;
+        const gainLinearText = `${gainLinear.toFixed(2)}x`;
+
+        $("analogGain").textContent = gainText;
+        $("analogGainLabel").textContent = gainText;
+        $("analogSchematicGain").textContent = `Buffer gain = ${gainText}`;
+        $("lpResistors").textContent = resistorText;
+        $("hpResistors").textContent = resistorText;
+        $("lpCaps").textContent = capText;
+        $("hpCaps").textContent = capText;
+        if (gainLinear <= 1.0001) {
+          $("gainResistor").textContent = "not fitted";
+          $("feedbackResistor").textContent = "0 Ohm link";
+        } else {
+          const nearestRf = nearestE24(rf);
+          $("gainResistor").textContent = `${formatOhms(rg)} (${gainLinearText})`;
+          $("feedbackResistor").textContent = `${formatOhms(rf)} exact | ${formatOhms(nearestRf)} E24`;
+        }
+      }
+
+      function updateReadouts(settings) {
+        $("fcLabel").textContent = formatHz(settings.fc);
+
+        const atFc = lr4Response(settings.fc, settings.fc);
+        const lpDb = db(cAbs(atFc.lp));
+        const hpDb = db(cAbs(atFc.hp));
+        const sumDb = db(cAbs(atFc.sum));
+        const phaseDelta = ((cPhase(atFc.hp) - cPhase(atFc.lp)) * 180) / Math.PI;
+
+        $("lpAtFc").textContent = `${lpDb.toFixed(2)} dB`;
+        $("hpAtFc").textContent = `${hpDb.toFixed(2)} dB`;
+        $("sumAtFc").textContent = `${sumDb.toFixed(2)} dB`;
+        $("phaseAtFc").textContent = `${Math.abs(phaseDelta).toFixed(1)} deg`;
+
+        $("lpCoeffs").textContent = formatCoeffs(
+          "Low-pass biquad",
+          biquadCoefficients("lowpass", settings.fc, settings.sampleRate),
+        );
+        $("hpCoeffs").textContent = formatCoeffs(
+          "High-pass biquad",
+          biquadCoefficients("highpass", settings.fc, settings.sampleRate),
+        );
+        updateAnalogReadouts(settings);
+      }
+
+      let latestData = [];
+      let latestSettings = getSettings();
+      let latestScales = null;
+
+      function render(options = {}) {
+        const syncFrequencyInput = options.syncFrequencyInput !== false;
+        latestSettings = getSettings();
+        if (syncFrequencyInput) {
+          controls.fcInput.value = Math.round(latestSettings.fc);
+        }
+        controls.fcRange.value = Math.round(latestSettings.fc);
+        latestData = generateData(latestSettings);
+        updateReadouts(latestSettings);
+        drawPlot(canvases.mag, "mag", latestData, latestSettings);
+        latestScales = drawPlot(canvases.phase, "phase", latestData, latestSettings);
+      }
+
+      function commitFrequencyInput() {
+        const committedFrequency = clamp(Number(controls.fcInput.value) || latestSettings.fc, 20, 20000);
+        controls.fcInput.value = Math.round(committedFrequency);
+        controls.fcRange.value = Math.round(committedFrequency);
+        render();
+      }
+
+      function commitAnalogGainInput() {
+        const committedGain = clamp(Number(controls.analogGainNumber.value) || latestSettings.analogGainDb, 0, 12);
+        controls.analogGainNumber.value = committedGain.toFixed(1);
+        controls.analogGainInput.value = committedGain.toFixed(1);
+        render();
+      }
+
+      function setMode(mode) {
+        const isAnalog = mode === "analog";
+        panels.digital.classList.toggle("hidden", isAnalog);
+        panels.analog.classList.toggle("hidden", !isAnalog);
+        panels.schematic.classList.toggle("hidden", !isAnalog);
+        panels.analogCapControl.classList.toggle("hidden", !isAnalog);
+        panels.analogGainControl.classList.toggle("hidden", !isAnalog);
+        panels.digitalSampleControl.classList.toggle("hidden", isAnalog);
+        panels.digitalTab.classList.toggle("tab-active", !isAnalog);
+        panels.analogTab.classList.toggle("tab-active", isAnalog);
+        panels.digitalTab.classList.toggle("text-muted-foreground", isAnalog);
+        panels.analogTab.classList.toggle("text-muted-foreground", !isAnalog);
+        render();
+      }
+
+      function updateCursor(event, type) {
+        if (!latestScales || !latestData.length) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const t = clamp((x - latestScales.pad.left) / (latestScales.width - latestScales.pad.left - latestScales.pad.right), 0, 1);
+        const freq = 10 ** (latestScales.logMin + t * (latestScales.logMax - latestScales.logMin));
+        const row = latestData.reduce((best, item) =>
+          Math.abs(Math.log(item.freq / freq)) < Math.abs(Math.log(best.freq / freq)) ? item : best,
+        );
+        const metric =
+          type === "mag"
+            ? `LP ${row.lpMag.toFixed(1)} dB | HP ${row.hpMag.toFixed(1)} dB | Sum ${row.sumMag.toFixed(1)} dB`
+            : `LP ${row.lpPhase.toFixed(0)} deg | HP ${row.hpPhase.toFixed(0)} deg | Sum ${row.sumPhase.toFixed(0)} deg`;
+        $("cursorReadout").textContent = `${formatHz(row.freq)} | ${metric}`;
+      }
+
+      Object.values(controls)
+        .filter((control) => control !== controls.fcInput)
+        .filter((control) => control !== controls.fcRange)
+        .filter((control) => control !== controls.analogGainInput)
+        .filter((control) => control !== controls.analogGainNumber)
+        .forEach((control) => {
+          control.addEventListener("input", render);
+          control.addEventListener("change", render);
+        });
+
+      controls.fcInput.addEventListener("input", () => {
+        const typedFrequency = Number(controls.fcInput.value);
+        if (Number.isFinite(typedFrequency) && typedFrequency >= 20 && typedFrequency <= 20000) {
+          controls.fcRange.value = Math.round(typedFrequency);
+          render({ syncFrequencyInput: false });
+        }
+      });
+
+      controls.fcInput.addEventListener("change", commitFrequencyInput);
+      controls.fcInput.addEventListener("blur", commitFrequencyInput);
+
+      controls.fcRange.addEventListener("input", () => {
+        controls.fcInput.value = controls.fcRange.value;
+        render();
+      });
+
+      controls.fcRange.addEventListener("change", () => {
+        controls.fcInput.value = controls.fcRange.value;
+        render();
+      });
+
+      controls.analogGainInput.addEventListener("input", () => {
+        controls.analogGainNumber.value = Number(controls.analogGainInput.value).toFixed(1);
+        render();
+      });
+
+      controls.analogGainNumber.addEventListener("input", () => {
+        const typedGain = Number(controls.analogGainNumber.value);
+        if (Number.isFinite(typedGain) && typedGain >= 0 && typedGain <= 12) {
+          controls.analogGainInput.value = typedGain;
+          render();
+        }
+      });
+
+      controls.analogGainNumber.addEventListener("change", commitAnalogGainInput);
+      controls.analogGainNumber.addEventListener("blur", commitAnalogGainInput);
+
+      document.querySelectorAll(".fcPreset").forEach((button) => {
+        button.addEventListener("click", () => {
+          controls.fcInput.value = button.dataset.fc;
+          controls.fcRange.value = button.dataset.fc;
+          render();
+        });
+      });
+
+      $("resetButton").addEventListener("click", () => {
+        controls.fcInput.value = 2000;
+        controls.fcRange.value = 2000;
+        controls.minFreq.value = 20;
+        controls.maxFreq.value = 20000;
+        controls.sampleRate.value = 48000;
+        controls.analogCap.value = "1e-8";
+        controls.analogGainInput.value = 0;
+        controls.analogGainNumber.value = 0;
+        controls.showLp.checked = true;
+        controls.showHp.checked = true;
+        controls.showSum.checked = true;
+        controls.showGrid.checked = true;
+        render();
+      });
+
+      panels.digitalTab.addEventListener("click", () => setMode("digital"));
+      panels.analogTab.addEventListener("click", () => setMode("analog"));
+
+      canvases.mag.addEventListener("mousemove", (event) => updateCursor(event, "mag"));
+      canvases.phase.addEventListener("mousemove", (event) => updateCursor(event, "phase"));
+      window.addEventListener("resize", render);
+
+      render();
+    </script>
+  </body>
+</html>
