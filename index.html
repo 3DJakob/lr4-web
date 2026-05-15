@@ -319,6 +319,8 @@
                   <dd class="text-right text-foreground">0.707</dd>
                   <dt>Buffer gain</dt>
                   <dd id="analogGain" class="text-right text-foreground">0.0 dB</dd>
+                  <dt>Branch gain</dt>
+                  <dd id="analogBranchGain" class="text-right text-foreground">0.0 dB</dd>
                 </dl>
               </div>
 
@@ -688,10 +690,15 @@
         };
       }
 
+      function getAnalogOutputGainDb(settings) {
+        return currentMode === "analog" ? settings.analogGainDb * 2 : 0;
+      }
+
       function generateData(settings) {
         const count = 640;
         const logMin = Math.log10(settings.minFreq);
         const logMax = Math.log10(settings.maxFreq);
+        const outputGainDb = getAnalogOutputGainDb(settings);
         const rows = [];
         for (let i = 0; i < count; i += 1) {
           const t = i / (count - 1);
@@ -699,9 +706,9 @@
           const response = lr4Response(freq, settings.fc);
           rows.push({
             freq,
-            lpMag: db(cAbs(response.lp)),
-            hpMag: db(cAbs(response.hp)),
-            sumMag: db(cAbs(response.sum)),
+            lpMag: db(cAbs(response.lp)) + outputGainDb,
+            hpMag: db(cAbs(response.hp)) + outputGainDb,
+            sumMag: db(cAbs(response.sum)) + outputGainDb,
             lpPhaseRaw: cPhase(response.lp),
             hpPhaseRaw: cPhase(response.hp),
             sumPhaseRaw: cPhase(response.sum),
@@ -736,8 +743,14 @@
         const plotHeight = height - pad.top - pad.bottom;
         const logMin = Math.log10(settings.minFreq);
         const logMax = Math.log10(settings.maxFreq);
-        const yDomain = type === "mag" ? [-72, 6] : [-390, 210];
-        const yTicks = type === "mag" ? [-72, -60, -48, -36, -24, -12, -6, 0, 6] : [-360, -270, -180, -90, 0, 90, 180];
+        const magnitudeTop = Math.max(6, Math.ceil((getAnalogOutputGainDb(settings) + 3) / 6) * 6);
+        const yDomain = type === "mag" ? [-72, magnitudeTop] : [-390, 210];
+        const yTicks =
+          type === "mag"
+            ? Array.from({ length: Math.floor((magnitudeTop + 72) / 12) + 1 }, (_, index) => -72 + index * 12).concat(
+                [-6, 6].filter((tick) => tick > -72 && tick < magnitudeTop),
+              )
+            : [-360, -270, -180, -90, 0, 90, 180];
 
         const xFor = (freq) => pad.left + ((Math.log10(freq) - logMin) / (logMax - logMin)) * plotWidth;
         const yFor = (value) => pad.top + ((yDomain[1] - value) / (yDomain[1] - yDomain[0])) * plotHeight;
@@ -890,11 +903,13 @@
         const resistorText = `${formatOhms(resistor)} exact | ${formatOhms(nearestResistor)} E24`;
         const capText = formatCap(settings.analogCap);
         const gainText = `${settings.analogGainDb.toFixed(1)} dB`;
+        const branchGainText = `${(settings.analogGainDb * 2).toFixed(1)} dB`;
         const gainLinearText = `${gainLinear.toFixed(2)}x`;
 
         $("analogGain").textContent = gainText;
+        $("analogBranchGain").textContent = branchGainText;
         $("analogGainLabel").textContent = gainText;
-        $("analogSchematicGain").textContent = `Buffer gain = ${gainText}`;
+        $("analogSchematicGain").textContent = `Buffer gain = ${gainText} per section`;
         $("lpResistors").textContent = resistorText;
         $("hpResistors").textContent = resistorText;
         $("lpCaps").textContent = capText;
@@ -913,9 +928,10 @@
         $("fcLabel").textContent = formatHz(settings.fc);
 
         const atFc = lr4Response(settings.fc, settings.fc);
-        const lpDb = db(cAbs(atFc.lp));
-        const hpDb = db(cAbs(atFc.hp));
-        const sumDb = db(cAbs(atFc.sum));
+        const outputGainDb = getAnalogOutputGainDb(settings);
+        const lpDb = db(cAbs(atFc.lp)) + outputGainDb;
+        const hpDb = db(cAbs(atFc.hp)) + outputGainDb;
+        const sumDb = db(cAbs(atFc.sum)) + outputGainDb;
         const phaseDelta = ((cPhase(atFc.hp) - cPhase(atFc.lp)) * 180) / Math.PI;
 
         $("lpAtFc").textContent = `${lpDb.toFixed(2)} dB`;
@@ -937,6 +953,7 @@
       let latestData = [];
       let latestSettings = getSettings();
       let latestScales = null;
+      let currentMode = "digital";
 
       function render(options = {}) {
         const syncFrequencyInput = options.syncFrequencyInput !== false;
@@ -966,6 +983,7 @@
       }
 
       function setMode(mode) {
+        currentMode = mode;
         const isAnalog = mode === "analog";
         panels.digital.classList.toggle("hidden", isAnalog);
         panels.analog.classList.toggle("hidden", !isAnalog);
